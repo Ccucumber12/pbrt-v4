@@ -8,10 +8,10 @@ namespace pbrt {
 struct Voxel {
   uint32_t size() const { return primitives.size(); }
   Voxel() {}
-  Voxel(std::shared_ptr<Primitive> prim) {
+  Voxel(Primitive *prim) {
     primitives.push_back(prim);
   }
-  void AddPrimitive(std::shared_ptr<Primitive> prim) {
+  void AddPrimitive(Primitive *prim) {
     primitives.push_back(prim);
   }
   
@@ -26,15 +26,14 @@ struct Voxel {
   }
 
   bool IntersectP(const Ray &ray, Float tMax) const {
-    for (const auto &prim : primitives) {
+    for (const auto &prim : primitives)
       if (prim->IntersectP(ray))
         return true;
-    }
     return false;
   }
 
 private:
-  std::vector<int> primitives; // index in GridAggregate::primitives
+  std::vector<Primitive*> primitives;
 };
 
 
@@ -74,13 +73,96 @@ GridAggregate::GridAggregate(std::vector<Primitive> p) : primitives(std::move(p)
       for (int y = vmin[1]; y <= vmax[1]; ++y)
         for (int x = vmin[0]; x <= vmax[0]; ++x) {
           int o = offset(x, y, z);
-          voxels[o].AddPrimitive(primitives[i]);
+          voxels[o].AddPrimitive(&primitives[i]);
         }
   }
+}
 
 
+pstd::optional<ShapeIntersection> GridAggregate::Intersect(const Ray &ray, Float tMax) const {
+  if (!bounds.IntersectP(ray.o, ray.d, tMax))
+    return {};
+    
+  Float nextT[3], deltaT[3];
+  int step[3], out[3], pos[3];
+  for (int axis = 0; axis < 3; ++axis) {
+    pos[axis] = posToVoxel(ray.o, axis);
+    if (ray.d[axis] >= 0) {
+      nextT[axis] = (voxelToPos(pos[axis] + 1, axis) - ray.o[axis]) / ray.d[axis];
+      deltaT[axis] = width[axis] / ray.d[axis];
+      step[axis] = 1;
+      out[axis] = nVoxels[axis];
+    } else {
+      nextT[axis] = (voxelToPos(pos[axis], axis) - ray.o[axis]) / ray.d[axis];
+      deltaT[axis] = -width[axis] / ray.d[axis];
+      step[axis] = -1;
+      out[axis] = -1;
+    }
+  }
 
-  
+  pstd::optional<ShapeIntersection> closestIsect;
+  for (;;) {
+    const Voxel& voxel = voxels[offset(pos[0], pos[1], pos[2])];
+    auto isect = voxel.Intersect(ray, tMax);
+    if (isect && (!closestIsect || isect->tHit < closestIsect->tHit))
+      closestIsect = isect;
+    
+    int bits = ((nextT[0] < nextT[1]) << 2) +
+               ((nextT[0] < nextT[2]) << 1) +
+               ((nextT[1] < nextT[2]));
+    const int cmpToAxis[8] = { 2, 1, 2, 1, 2, 2, 0, 0 };
+    int stepAxis = cmpToAxis[bits];
+    if ((closestIsect && closestIsect->tHit < nextT[stepAxis]) || 
+        tMax < nextT[stepAxis])
+      break;
+    pos[stepAxis] += step[stepAxis];
+    if (pos[stepAxis] == out[stepAxis])
+      break;
+    nextT[stepAxis] += deltaT[stepAxis];
+  }
+  return closestIsect;
+}
+
+
+bool GridAggregate::IntersectP(const Ray &ray, Float tMax) const {
+ if (!bounds.IntersectP(ray.o, ray.d, tMax))
+    return false;
+    
+  Float nextT[3], deltaT[3];
+  int step[3], out[3], pos[3];
+  for (int axis = 0; axis < 3; ++axis) {
+    pos[axis] = posToVoxel(ray.o, axis);
+    if (ray.d[axis] >= 0) {
+      nextT[axis] = (voxelToPos(pos[axis] + 1, axis) - ray.o[axis]) / ray.d[axis];
+      deltaT[axis] = width[axis] / ray.d[axis];
+      step[axis] = 1;
+      out[axis] = nVoxels[axis];
+    } else {
+      nextT[axis] = (voxelToPos(pos[axis], axis) - ray.o[axis]) / ray.d[axis];
+      deltaT[axis] = -width[axis] / ray.d[axis];
+      step[axis] = -1;
+      out[axis] = -1;
+    }
+  }
+
+  for (;;) {
+    const Voxel& voxel = voxels[offset(pos[0], pos[1], pos[2])];
+    if (voxel.IntersectP(ray, tMax))
+      return true;
+    
+    int bits = ((nextT[0] < nextT[1]) << 2) +
+               ((nextT[0] < nextT[2]) << 1) +
+               ((nextT[1] < nextT[2]));
+    const int cmpToAxis[8] = { 2, 1, 2, 1, 2, 2, 0, 0 };
+    int stepAxis = cmpToAxis[bits];
+    if (tMax < nextT[stepAxis])
+      break;
+    pos[stepAxis] += step[stepAxis];
+    if (pos[stepAxis] == out[stepAxis])
+      break;
+    nextT[stepAxis] += deltaT[stepAxis];
+  }
+  return false;
 }
 
 

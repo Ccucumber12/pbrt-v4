@@ -9,6 +9,7 @@
 
 namespace pbrt {
 
+struct GridPrimitive;
 struct Voxel;
 
 class GridAggregate {
@@ -34,7 +35,7 @@ class GridAggregate {
         return z * nVoxels[0] * nVoxels[1] + y * nVoxels[0] + x;
     }
 
-    std::vector<Primitive> primitives;
+    std::vector<GridPrimitive> primitives;
     std::vector<Voxel> voxels;
     int nVoxels[3];
     Bounds3f bounds;

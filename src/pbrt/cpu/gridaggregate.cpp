@@ -5,16 +5,44 @@
 
 namespace pbrt {
 
+
+struct GridPrimitive {
+  GridPrimitive() {}
+  GridPrimitive(Primitive p) : prim(std::move(p)) {}
+
+  Bounds3f Bounds() const { return prim.Bounds(); }
+
+  pstd::optional<ShapeIntersection> Intersect(const Ray &ray, Float tMax) {
+    Float checkHash = HashFloat(ray.o, ray.d);
+    if (checkHash == prevCheckHash)
+      return {};
+    prevCheckHash = checkHash;
+    return prim.Intersect(ray, tMax);
+  }
+
+  bool IntersectP(const Ray &ray, Float tMax) {
+    Float checkHash = HashFloat(ray.o, ray.d);
+    if (checkHash == prevCheckHash)
+      return false;
+    prevCheckHash = checkHash;
+    return prim.IntersectP(ray, tMax);
+  }
+
+private:
+  Primitive prim;
+  Float prevCheckHash = 0;
+};
+
 struct Voxel {
   uint32_t size() const { return primitives.size(); }
   Voxel() {}
-  Voxel(Primitive *prim) {
+  Voxel(GridPrimitive *prim) {
     primitives.push_back(prim);
   }
-  void AddPrimitive(Primitive *prim) {
+  void AddPrimitive(GridPrimitive *prim) {
     primitives.push_back(prim);
   }
-  
+
   pstd::optional<ShapeIntersection> Intersect(const Ray &ray, Float tMax) const {
     pstd::optional<ShapeIntersection> closestIsect;
     for (const auto &prim : primitives) {
@@ -27,18 +55,21 @@ struct Voxel {
 
   bool IntersectP(const Ray &ray, Float tMax) const {
     for (const auto &prim : primitives)
-      if (prim->IntersectP(ray))
+      if (prim->IntersectP(ray, tMax))
         return true;
     return false;
   }
 
 private:
-  std::vector<Primitive*> primitives;
+  std::vector<GridPrimitive*> primitives;
 };
 
 
-GridAggregate::GridAggregate(std::vector<Primitive> p) : primitives(std::move(p)) {
-  CHECK(!primitives.empty());
+GridAggregate::GridAggregate(std::vector<Primitive> p) {
+  CHECK(!p.empty());
+  primitives.resize(p.size());
+  for (uint32_t i = 0; i < p.size(); ++i)
+    primitives[i] = GridPrimitive(std::move(p[i]));
 
   for (const auto &prim : primitives)
     bounds = Union(bounds, prim.Bounds());

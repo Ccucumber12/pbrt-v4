@@ -19,6 +19,8 @@
 #include <pbrt/util/colorspace.h>
 #include <pbrt/util/parallel.h>
 
+#include <chrono>
+
 namespace pbrt {
 
 void RenderCPU(BasicScene &parsedScene) {
@@ -156,7 +158,11 @@ void RenderCPU(BasicScene &parsedScene) {
     }
 
     // Render!
+    auto start = std::chrono::high_resolution_clock::now();
     integrator->Render();
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> duration = end - start;
+    printf("Render Time: %.0lf (s)\n", duration.count());
 
     LOG_VERBOSE("Memory used after rendering: %s", GetCurrentRSS());
 

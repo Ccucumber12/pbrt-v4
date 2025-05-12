@@ -1591,7 +1591,7 @@ Primitive BasicScene::CreateAggregate(
                                       accelerator.parameters);
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> duration = end - start;
-    printf("Accelerator Construction Time: %.2lf (s)\n", duration.count());
+    printf("Accelerator Construction Time: %.0lf (s)\n", duration.count());
 
     LOG_VERBOSE("Finished top-level accelerator");
     return aggregate;

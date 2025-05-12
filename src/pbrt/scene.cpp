@@ -28,6 +28,7 @@
 
 #include <iostream>
 #include <mutex>
+#include <chrono>
 
 namespace pbrt {
 
@@ -1583,9 +1584,15 @@ Primitive BasicScene::CreateAggregate(
     // Accelerator
     Primitive aggregate = nullptr;
     LOG_VERBOSE("Starting top-level accelerator");
+
+    auto start = std::chrono::high_resolution_clock::now();
     if (!primitives.empty())
         aggregate = CreateAccelerator(accelerator.name, std::move(primitives),
                                       accelerator.parameters);
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> duration = end - start;
+    std::cerr << "Accelerator construction time: " << duration.count() << "(s) \n";
+
     LOG_VERBOSE("Finished top-level accelerator");
     return aggregate;
 }

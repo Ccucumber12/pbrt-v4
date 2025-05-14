@@ -4,6 +4,7 @@
 
 #include <pbrt/cpu/aggregates.h>
 #include <pbrt/cpu/gridaggregate.h>
+#include <pbrt/cpu/vanillagridaggregate.h>
 
 #include <pbrt/interaction.h>
 #include <pbrt/paramdict.h>
@@ -1170,6 +1171,8 @@ Primitive CreateAccelerator(const std::string &name, std::vector<Primitive> prim
         accel = KdTreeAggregate::Create(std::move(prims), parameters);
     else if (name == "grid")
         accel = GridAggregate::Create(std::move(prims), parameters);
+    else if (name == "vgrid")
+        accel = VanillaGridAggregate::Create(std::move(prims), parameters);
     else
         ErrorExit("%s: accelerator type unknown.", name);
 

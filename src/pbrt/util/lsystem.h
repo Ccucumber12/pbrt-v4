@@ -17,7 +17,7 @@ struct Tube {
 
 struct Trie {
   struct Node {
-    Node *nxt[128];
+    Node *nxt[128] = {};
     bool terminal = false;
     std::string value;
   };

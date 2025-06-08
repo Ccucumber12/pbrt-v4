@@ -12,6 +12,7 @@
 #include <pbrt/ray.h>
 #include <pbrt/util/buffercache.h>
 #include <pbrt/util/mesh.h>
+#include <pbrt/util/lsystem.h>
 #include <pbrt/util/pstd.h>
 #include <pbrt/util/sampling.h>
 #include <pbrt/util/transform.h>

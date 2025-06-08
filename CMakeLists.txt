@@ -640,6 +640,7 @@ SET (PBRT_UTIL_SOURCE
   src/pbrt/util/math.cpp
   src/pbrt/util/memory.cpp
   src/pbrt/util/mesh.cpp
+  src/pbrt/util/lsystem.cpp
   src/pbrt/util/mipmap.cpp
   src/pbrt/util/noise.cpp
   src/pbrt/util/parallel.cpp
@@ -681,6 +682,7 @@ SET (PBRT_UTIL_SOURCE_HEADERS
   src/pbrt/util/math.h
   src/pbrt/util/memory.h
   src/pbrt/util/mesh.h
+  src/pbrt/util/lsystem.h
   src/pbrt/util/mipmap.h
   src/pbrt/util/noise.h
   src/pbrt/util/parallel.h
@@ -754,6 +756,7 @@ if (PBRT_CUDA_ENABLED)
    src/pbrt/util/math.cpp
 #   src/pbrt/util/memory.cpp
    src/pbrt/util/mesh.cpp
+   src/pbrt/util/lsystem.cpp
 #   src/pbrt/util/mipmap.cpp
    src/pbrt/util/noise.cpp
 #   src/pbrt/util/parallel.cpp

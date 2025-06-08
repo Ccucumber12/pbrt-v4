@@ -141,6 +141,14 @@ std::vector<double> SplitStringToDoubles(std::string_view str, char ch) {
     return doubles;
 }
 
+bool IsAllAlpha(std::string_view str) {
+    for (char c : str) {
+        if (!std::isalpha(c))
+            return false;
+    }
+    return true;
+}
+
 #ifdef PBRT_IS_WINDOWS
 std::wstring WStringFromU16String(std::u16string str) {
     std::wstring ws;

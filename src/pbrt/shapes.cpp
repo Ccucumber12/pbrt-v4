@@ -1488,6 +1488,9 @@ pstd::vector<Shape> Shape::Create(
                                            vertexIndices, P, alloc);
 
         shapes = Triangle::CreateTriangles(mesh, alloc);
+    } else if (name == "lsystem") {
+        Lsystem lsystem = Lsystem(renderFromObject, objectFromRender, parameters, loc, alloc);
+        shapes = lsystem.CreateShapes(alloc);
     } else
         ErrorExit(loc, "%s: shape type unknown.", name);
 

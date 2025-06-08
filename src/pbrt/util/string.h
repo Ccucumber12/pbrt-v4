@@ -27,6 +27,8 @@ std::vector<int64_t> SplitStringToInt64s(std::string_view str, char ch);
 std::vector<Float> SplitStringToFloats(std::string_view str, char ch);
 std::vector<double> SplitStringToDoubles(std::string_view str, char ch);
 
+bool IsAllAlpha(std::string_view str);
+
 // String Utility Function Declarations
 std::string UTF8FromUTF16(std::u16string str);
 std::u16string UTF16FromUTF8(std::string str);

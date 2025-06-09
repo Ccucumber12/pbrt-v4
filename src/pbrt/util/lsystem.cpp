@@ -3,6 +3,7 @@
 
 #include <pbrt/util/string.h>
 #include <pbrt/util/log.h>
+#include <set>
 
 namespace pbrt {
 
@@ -39,6 +40,42 @@ std::string Trie::Match(std::string::iterator &it, std::string::iterator end) {
   return ret;
 }
 
+struct State {
+  Float stepSize;
+  Float radius;
+  Point3f currentPos;
+  Vector3f frontVec;
+  Vector3f rightVec;
+
+  State(Float stepSize, Float radius, const Point3f& currentPos,
+        const Vector3f& frontVec, const Vector3f& rightVec)
+      : stepSize(stepSize),
+        radius(radius),
+        currentPos(currentPos),
+        frontVec(frontVec),
+        rightVec(rightVec) {}
+};
+
+void Polygon::CreateShapes(Allocator alloc, const Transform *renderFromObject, 
+                          const Transform *objectFromRender, pstd::vector<Shape> &shapes, int &shapeIdx) {
+  if (!indicies.empty()) {
+    TriangleMesh *mesh = alloc.new_object<TriangleMesh>(
+        *renderFromObject, false, indicies, points,
+        std::vector<Vector3f>(), std::vector<Normal3f>(),
+        std::vector<Point2f>(), std::vector<int>(), alloc);
+    auto triShapes = Triangle::CreateTriangles(mesh, alloc);
+    for (const auto& triangle : triShapes)
+      shapes[shapeIdx++] = triangle;
+  }
+}
+
+void Polygon::AddPoint(Point3f p) {
+  points.emplace_back(p);
+  ++nPoints;
+  if (nPoints >= 3)
+    indicies.insert(indicies.end(), {0, nPoints-2, nPoints-1});
+}
+
 Lsystem::Lsystem( const Transform *renderFromObject, 
                   const Transform *objectFromRender,
                   const ParameterDictionary &parameters,
@@ -47,55 +84,81 @@ Lsystem::Lsystem( const Transform *renderFromObject,
   radius = parameters.GetOneFloat("radius", 0.05);
   stepSize = parameters.GetOneFloat("stepsize", 1.0);
   angle = parameters.GetOneFloat("angle", 28.0);
+  radiusScale = parameters.GetOneFloat("radiusscale", 0.9);
 
   nGenerations = parameters.GetOneInt("n", 3);
   axiom = parameters.GetOneString("axiom", "");
 
   std::vector<std::string> raw_rules = parameters.GetStringArray("rules");
   for (std::string rule : raw_rules) {
+    rule.erase(std::remove(rule.begin(), rule.end(), ' '), rule.end());
     auto parts = SplitString(rule, '=');
     if (parts.size() != 2)
       ErrorExit(loc, "Invalid rule %s.", rule);
     std::string key = parts[0];
     std::string value = parts[1];
-    if (!IsAllAlpha(key))
-      ErrorExit(loc, "Key in rule contain non-alphabet: %s.", rule);
     rules.Insert(key, value);
   }
 
   Point3f currentPos(0, 0, 0);
-  Vector3f direction(0, 0, 1); // up
+  Vector3f frontVec(0, 0, 1); // starting upwards
+  Vector3f rightVec(1, 0, 0);
 
   sequence = GenerateSequence();
-  pstd::vector<Point3f> posStack;
-  pstd::vector<Vector3f> dirStack;
+  pstd::vector<State> stack;
+  Polygon *polygon = nullptr;
   for (char c : sequence) {
-    if (c == 'F') {
-      Point3f newPos = currentPos + direction * stepSize;
-      tubes.emplace_back(Tube(currentPos, newPos));
+    if (c == '>') {
+      Point3f newPos = currentPos + frontVec * stepSize;
+      tubes.emplace_back(Tube(currentPos, newPos, radius));
       currentPos = newPos;
+    } else if (c == '~') {
+      currentPos = currentPos + frontVec * stepSize;
     } else if (c == '+') {
-      direction = RotateX(angle)(direction);
+      frontVec = Rotate(angle, rightVec)(frontVec);
     } else if (c == '-') {
-      direction = RotateX(-angle)(direction);
+      frontVec = Rotate(-angle, rightVec)(frontVec);
     } else if (c == '&') {
-      direction = RotateY(angle)(direction);
+      Vector3f upVec = Cross(frontVec, rightVec);
+      frontVec = Rotate(angle, upVec)(frontVec);
+      rightVec = Rotate(angle, upVec)(rightVec);
     } else if (c == '^') {
-      direction = RotateY(-angle)(direction);
-    } else if (c == '\\') {
-      direction = RotateZ(angle)(direction);
+      Vector3f upVec = Cross(frontVec, rightVec);
+      frontVec = Rotate(-angle, upVec)(frontVec);
+      rightVec = Rotate(-angle, upVec)(rightVec);
+    } else if (c == '`') {
+      rightVec = Rotate(angle, frontVec)(rightVec);
     } else if (c == '/') {
-      direction = RotateZ(-angle)(direction);
-    } else if (c == '[') {
-      posStack.emplace_back(currentPos);
-      dirStack.emplace_back(direction);
-    } else if (c == ']') {
-      if (posStack.empty())
-        ErrorExit("Invalid Sequence: %s", sequence);
-      currentPos = posStack.back();
-      direction = dirStack.back();
-      posStack.pop_back();
-      dirStack.pop_back();
+      rightVec = Rotate(-angle, frontVec)(rightVec);
+    } else if (c == '|') {
+      frontVec = Rotate(180, rightVec)(frontVec);
+    } else if (c == '(') {
+      stack.emplace_back(stepSize, radius, currentPos, frontVec, rightVec);
+    } else if (c == ')') {
+      if (stack.empty())
+        ErrorExit("Invalid sequence (pop when stack empty): %s", sequence);
+      stepSize = stack.back().stepSize;
+      radius = stack.back().radius;
+      currentPos = stack.back().currentPos;
+      frontVec = stack.back().frontVec;
+      rightVec = stack.back().rightVec;
+      stack.pop_back();
+    } else if (c == '\'') {
+      radius *= radiusScale;
+    } else if (c == '{') {
+      if (polygon) 
+        ErrorExit("Invalid sequence (double polygon construction): %s", sequence);
+      polygon = new Polygon();
+    } else if (c == '}') {
+      if (!polygon)
+        ErrorExit("Invalid sequence (end polygon when not in construction): %s", sequence);
+      polygons.emplace_back(*polygon);
+      polygon = nullptr;
+    } else if (c == '@') {
+      if (!polygon)
+        Error("Invalid sequence (add point when not in polygon).");
+      else
+        polygon -> AddPoint(currentPos);
     }
   }
   nTubes = tubes.size();
@@ -105,28 +168,44 @@ pstd::vector<Shape> Lsystem::CreateShapes(Allocator alloc) {
   Float zmin = 0;
   Float phimax = 360;
 
-  pstd::vector<Shape> cylinders(nTubes, alloc);
+  int nShape = nTubes * 3; // 1 tube + 2 hemispheres
+  for (Polygon &poly : polygons)
+    nShape += poly.indicies.size() / 3;
+  pstd::vector<Shape> shapes(nShape, alloc);
+
   Cylinder *cy = alloc.allocate_object<Cylinder>(nTubes);
+  Sphere *sp = alloc.allocate_object<Sphere>(nTubes * 2);
   for (int i = 0; i < nTubes; ++i) {
     Point3f p0 = tubes[i].start;
     Point3f p1 = tubes[i].end;
+    Float r = tubes[i].radius;
     
     Vector3f dir = p1 - p0;
     Float height = Length(dir);
     dir /= height;
 
-    Transform objectFromTube = Translate(Vector3f(p0)) * RotateFromTo(Vector3f(0,0,1), dir);
-    Transform *renderFromTube = alloc.new_object<Transform>(*renderFromObject * objectFromTube);
-    Transform *tubeFromRender = alloc.new_object<Transform>(Inverse(objectFromTube) * *objectFromRender);
+    Transform objectFromStart = Translate(Vector3f(p0)) * RotateFromTo(Vector3f(0,0,1), dir);
+    Transform *renderFromStart = alloc.new_object<Transform>(*renderFromObject * objectFromStart);
+    Transform *startFromRender = alloc.new_object<Transform>(Inverse(objectFromStart) * *objectFromRender);
 
-    // Then use these transforms in construct:
-    alloc.construct(&cy[i], renderFromTube, tubeFromRender, false,
-                    radius, zmin, height, phimax);
-    cylinders[i] = &cy[i];
-    // LOG_ERROR("p0: %f, %f, %f", p0.x, p0.y, p0.z);
-    // LOG_ERROR("p1: %f, %f, %f", p1.x, p1.y, p1.z);
+    Transform objectFromEnd = Translate(Vector3f(p1)) * RotateFromTo(Vector3f(0,0,1), dir);
+    Transform *renderFromEnd = alloc.new_object<Transform>(*renderFromObject * objectFromEnd);
+    Transform *endFromRender = alloc.new_object<Transform>(Inverse(objectFromEnd) * *objectFromRender);
+
+    alloc.construct(&cy[i], renderFromStart, startFromRender, false,
+                    r, zmin, height, phimax);
+    shapes[3*i] = &cy[i];
+    
+    alloc.construct(&sp[2*i], renderFromStart, startFromRender, false, r, -r, 0, 360);
+    alloc.construct(&sp[2*i+1], renderFromEnd, endFromRender, false, r, 0, r, 360);
+    shapes[3*i+1] = &sp[2*i];
+    shapes[3*i+2] = &sp[2*i+1];
   }
-  return cylinders;
+
+  int shapeIdx = nTubes * 3;
+  for (Polygon poly : polygons)
+    poly.CreateShapes(alloc, renderFromObject, objectFromRender, shapes, shapeIdx);
+  return shapes;
 }
 
 std::string Lsystem::GenerateSequence() {
@@ -137,7 +216,7 @@ std::string Lsystem::GenerateSequence() {
     while (it != seq.end())
       nextSeq += rules.Match(it, seq.end());
     seq = std::move(nextSeq);
-    // LOG_ERROR("Sequence: %s", seq);
+    // LOG_VERBOSE("seq: %s", seq);
   }
   return seq;
 }

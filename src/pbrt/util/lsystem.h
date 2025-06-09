@@ -11,8 +11,10 @@ namespace pbrt {
 
 struct Tube {
   public:
-    Tube(Point3f start, Point3f end) : start(start), end(end) {};
+    Tube(Point3f start, Point3f end, Float radius) 
+      : start(start), end(end), radius(radius){};
     Point3f start, end;
+    Float radius;
 };
 
 struct Trie {
@@ -25,6 +27,16 @@ struct Trie {
   Node *root = new Node;
   void Insert(const std::string &key, const std::string &value);
   std::string Match(std::string::iterator &it, std::string::iterator end);
+};
+
+struct Polygon {
+  std::vector<Point3f> points;
+  std::vector<int> indicies;
+  int nPoints = 0;
+
+  void CreateShapes(Allocator alloc, const Transform *renderFromObject, 
+                      const Transform *objectFromRender, pstd::vector<Shape> &shapes, int &shapeIdx);
+  void AddPoint(Point3f p);
 };
 
 class Lsystem {
@@ -45,13 +57,17 @@ class Lsystem {
     Float angle;
     int nGenerations;
     int nTubes;
+
+    Float radiusScale;
+    Float stepSizeScale;
     
     std::string axiom;
     Trie rules;
     std::string sequence;
 
     const char ruleDelimiter = '=';
-    std::vector<Tube> tubes;
+    pstd::vector<Tube> tubes;
+    pstd::vector<Polygon> polygons;
 
     // Lsystem Private Methods
     std::string GenerateSequence();
